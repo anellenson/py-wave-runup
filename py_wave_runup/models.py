@@ -19,7 +19,7 @@ class RunupModel(metaclass=ABCMeta):
 
     doi = None
 
-    def __init__(self, Hs=None, Tp=None, beta=None, Lp=None, h=None, r=None):
+    def __init__(self, Hs=None, Tp=None, beta=None, Lp=None, h=None, r=None, dtoeSWL=None, bsand=None, bberm=None):
         """
         Args:
             Hs (:obj:`float` or :obj:`list`): Significant wave height. In order to
@@ -36,6 +36,10 @@ class RunupModel(metaclass=ABCMeta):
                 given deep-water conditions are assumed.
             r (:obj:`float` or :obj:`list`): Hydraulic roughness length. Can be
                 approximated by :math:`r=2.5D_{50}`.
+            dtoe (:obj:'float' or :obj:`list`): depth at the toe of the cobble berm revetment
+            bsand (:obj:'float'or :obj:`list`): slope of the sand fronting the cobble
+                berm revetment.
+            bberm (:obj:'float' or :obj:`list`): slope of the cobble revetment.
         """
 
         self.Hs = Hs
@@ -44,6 +48,9 @@ class RunupModel(metaclass=ABCMeta):
         self.Lp = Lp
         self.h = h
         self.r = r
+        self.dtoeSWL = dtoeSWL
+        self.bsand = bsand
+        self.bberm = bberm
 
         # Ensure wave length or peak period is specified
         if all(v is None for v in [Lp, Tp]):
@@ -54,6 +61,9 @@ class RunupModel(metaclass=ABCMeta):
         self.Hs = np.atleast_1d(Hs).astype(float)
         self.beta = np.atleast_1d(beta).astype(float)
         self.r = np.atleast_1d(r).astype(float)
+        self.dtoeSWL = np.atleast_1d(dtoeSWL).astype(float)
+        self.bsand = np.atleast_1d(bsand).astype(float)
+        self.bberm = np.atleast_1d(bberm).astype(float)
 
         # Calculate wave length if it hasn't been specified.
         if not Lp:
@@ -119,6 +129,58 @@ class RunupModel(metaclass=ABCMeta):
             k2 = np.nan  # pragma: no cover
 
         return k2
+
+class Blenkinsopp2022(RunupModel):
+    """
+    Implements the runup model from Blenkinsopp et al (2022).
+
+        Blenkinsopp, C. E., Bayle, P. M., Martins, K., Foss, O. W., Almeida, L. P., Kaminsky, G. M., ... & Matsumoto, H. (2022).
+        Wave runup on composite beaches and dynamic cobble berm revetments. Coastal Engineering, 104148.
+        https://doi.org/10.1016/j.coastaleng.2022.104148
+
+        Calculates 2% runup level at cobble berm revetments given the slope of the berm and the dissipative sand fronting the berm.
+        The first method uses superposition of mean setup level and depth at the toe of the berm.
+        The second method explicitly estimates infragravity and short wave swash components.
+        Thereafter, estimates setup at the toe of the berm.
+    Args:
+        dtoeSWL (:obj:`float` or :obj:`list`): Vertical elevation difference between berm toe and SWL (m)
+            the nearshore, then reverse-shoal to deep water.
+        bsand (:obj:`float` or :obj:`list`): angle of the mean beach slope and horizontal.
+        bberm (:obj:`float` or :obj:`list`): angle of the mean berm slope and horizontal.
+
+    """
+    def est_dberm(self):
+        #Check that you have all the parameterse
+        if len(set(x.size for x in [self.dtoeSWL, self.bberm, self.bsand])) != 1:
+            raise ValueError("Input arrays are not the same length")
+
+        #Estimate the water depth at the berm toe, which requires estimating the setup at the toe of the berm.
+        #First estimate surf zone length (eq. 13)
+        self.lsz = (5/3 * self.Hs - self.dtoeSWL) / np.tan(self.bsand) + self.dtoeSWL / np.tan(self.bberm)
+
+        #Estimate setup at the toe of the berm (eq.22)
+        self.setup_toe = 3.33E-4 * self.lsz + 0.12
+
+        #Estimate depth at the toe of the berm as a superposition of setup and SWL depth
+        self.dtoe = self.dtoeSWL + self.setup_toe
+
+
+    @property
+    def R2_eq21(self):
+        """
+        R2% using equation 21
+        """
+        self.est_dberm()
+        #Estimate wave height at the berm. the coefficient 0.87 was derived using their datsets and could be perturbed for uncertainty estimations
+        self.Htoe = 0.87 * self.dtoe
+
+        result = 0.19 * self.Hs + 3.11 * self.Htoe * np.tan(self.bberm) + 0.26
+        result = self._return_one_or_array(result)
+        return result
+
+    # @property
+    # def R2_eq23(self):
+
 
 
 class Stockdon2006(RunupModel):

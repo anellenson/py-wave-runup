@@ -151,3 +151,52 @@ def load_random_sto06(
     df["sinc"] = model.sinc + noise
 
     return df
+
+def load_Blenkinsopp_synth_data():
+    """
+    This function is intended to load Blenkinsopp data. It is synthetic, but uses the range of values published in Table 1.
+    The Hs and steepness values range between the reported bounds, and the Tp is generated based on the constraint of the steepness value.
+
+    Returns:
+        :obj:DataFrame
+    """
+    Hs_lim = [(0.65,2.54),(2.16,6.1),(1.8,6.0)]
+    steep_lim = [(0.004,0.033),(0.002,0.042),(0.003,0.05)]
+    beta_sand = [0.015,0.0125,0.0225]
+    beta_berm = [0.18, 0.2, 0.12]
+    dtoe = [0.4, 1, 0.75]
+    locs = ['SALT','WWH','NC']
+
+
+    #Initialize storage lists
+    Hs_all = []
+    Lp_all = []
+    Tp_all = []
+    betasand_all = []
+    betaberm_all = []
+    dtoe_all = []
+    locs_all = []
+
+    for i in range(3):
+        Hs = np.array([random.uniform(Hs_lim[i][0],Hs_lim[i][1]) for x in range(100)]) #randomly generate 100 numbers within range
+        steepness = np.array([random.uniform(steep_lim[i][0], steep_lim[i][1]) for x in range(100)])
+        Lp = Hs_salt/steepness
+        Tp = np.sqrt((Lp_salt*2*np.pi)/9.81)
+        beta_sand = [beta_sand[i]]*100
+        beta_berm = [beta_berm[i]]*100
+        dtoe = [dtoe[i]]*100
+        loc = [locs[i]]*100
+
+        Hs_all = Hs_all + list(Hs)
+        Lp_all = Lp_all + list(Lp)
+        Tp_all = Tp_all + list(Tp)
+        betasand_all = betasand_all + beta_sand
+        betaberm_all = betaberm_all + beta_berm
+        dtoe_all = dtoe_all + dtoe
+        locs_all = locs_all + loc
+
+    #Write out the dataframe
+
+    df = pd.DataFrame({'hs':Hs_all, 'lp':Lp_all, 'tp':Tp_all, 'beta_sand':betasand_all, 'beta_berm':betaberm_all, 'dtoeSWL':dtoe_all, 'loc':locs_all})
+
+    return df

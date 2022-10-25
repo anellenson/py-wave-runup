@@ -157,6 +157,8 @@ class Blenkinsopp2022(RunupModel):
         #Estimate the water depth at the berm toe, which requires estimating the setup at the toe of the berm.
         #First estimate surf zone length (eq. 13)
         self.lsz = (5/3 * self.Hs - self.dtoeSWL) / np.tan(self.bsand) + self.dtoeSWL / np.tan(self.bberm)
+        if np.any(self.lsz<0):
+            raise ValueError("Negative surf zone length, non-sensical")
 
         #Estimate setup at the toe of the berm (eq.22)
         self.setup_toe = 3.33E-4 * self.lsz + 0.12

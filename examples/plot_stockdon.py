@@ -68,8 +68,6 @@ df["blen22"] = blen22.R2_eq21
 fig, ax1 = plt.subplots(1, 1, figsize=(4, 4), dpi=300)
 ax1.plot(df.r2, df.sto06_r2, "b.", markersize=2, linewidth=0.5)
 ax1.plot(df.r2, df.blen22, "r.", markersize=2, marker='^', linewidth=0.5)
-ax1.plot(df.r2, df.blen22_deep, "g.", markersize=2, marker = 'o', linewidth=0.5)
-
 # Add 1:1 line to indicate perfect fit
 ax1.plot([0, 12], [0, 12], "k-")
 
@@ -78,7 +76,7 @@ ax1.set_xlabel("Observed R2 (m)")
 ax1.set_ylabel("Modelled R2 (m)")
 ax1.set_title("Runup Model")
 ax1.legend(['Stockdon', 'Blenkinsopp'])
-
+plt.savefig('stockdonvsblenkinsopp.png')
 plt.tight_layout()
 
 #############################################

@@ -164,7 +164,7 @@ def load_Blenkinsopp_synth_data():
     steep_lim = [(0.004,0.033),(0.002,0.042),(0.003,0.05)]
     beta_sand = [0.015,0.0125,0.0225]
     beta_berm = [0.18, 0.2, 0.12]
-    dtoe = [0.4, 1, 0.75]
+    dtoes = [0.4, 1, 0.75]
     locs = ['SALT','WWH','NC']
 
 
@@ -180,11 +180,11 @@ def load_Blenkinsopp_synth_data():
     for i in range(3):
         Hs = np.array([random.uniform(Hs_lim[i][0],Hs_lim[i][1]) for x in range(100)]) #randomly generate 100 numbers within range
         steepness = np.array([random.uniform(steep_lim[i][0], steep_lim[i][1]) for x in range(100)])
-        Lp = Hs_salt/steepness
-        Tp = np.sqrt((Lp_salt*2*np.pi)/9.81)
+        Lp = Hs/steepness
+        Tp = np.sqrt((Lp*2*np.pi)/9.81)
         beta_sand = [beta_sand[i]]*100
         beta_berm = [beta_berm[i]]*100
-        dtoe = [dtoe[i]]*100
+        dtoe = [dtoes[i]]*100
         loc = [locs[i]]*100
 
         Hs_all = Hs_all + list(Hs)
@@ -197,6 +197,6 @@ def load_Blenkinsopp_synth_data():
 
     #Write out the dataframe
 
-    df = pd.DataFrame({'hs':Hs_all, 'lp':Lp_all, 'tp':Tp_all, 'beta_sand':betasand_all, 'beta_berm':betaberm_all, 'dtoeSWL':dtoe_all, 'loc':locs_all})
+    df = pd.DataFrame({'hs':Hs_all, 'lp':Lp_all, 'tp':Tp_all, 'bsand':betasand_all, 'bberm':betaberm_all, 'dtoeSWL':dtoe_all, 'loc':locs_all})
 
     return df

@@ -107,6 +107,9 @@ class RunupModel(metaclass=ABCMeta):
             # Reverse shoal the wave to deep water
             self.H0 = self.Hs * np.sqrt(cg1 / cg0)
 
+            #store offshore wave height as wave height to use
+            self.Hs = self.H0
+
 
         # Ensure arrays are of the same size
         if len(set(x.size for x in [self.Hs, self.Tp, self.beta, self.Lp])) != 1:
@@ -179,7 +182,7 @@ class RunupModel(metaclass=ABCMeta):
 
         #Estimate the water depth at the berm toe, which requires estimating the setup at the toe of the berm.
         #First estimate surf zone length (eq. 13)
-        self.lsz = (5/3 * self.H0 - self.dtoeSWL) / np.tan(self.bsand) + self.dtoeSWL / np.tan(self.bberm)
+        self.lsz = (5/3 * self.Hs - self.dtoeSWL) / np.tan(self.bsand) + self.dtoeSWL / np.tan(self.bberm)
         # if np.any(self.lsz<0):
         #     raise ValueError("Negative surf zone length, non-sensical")
 
@@ -213,7 +216,7 @@ class Blenkinsopp2022(RunupModel):
         """
         self.est_dberm_Hberm()
 
-        result = 0.19 * self.H0 + 3.11 * self.Htoe * np.tan(self.bberm) + 0.26
+        result = 0.19 * self.Hs + 3.11 * self.Htoe * np.tan(self.bberm) + 0.26
         result = self._return_one_or_array(result)
         return result
 

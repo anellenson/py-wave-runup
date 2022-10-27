@@ -105,8 +105,8 @@ class RunupModel(metaclass=ABCMeta):
             cg1 = c1 * n
 
             # Reverse shoal the wave to deep water
-            self.H0 = self.Hs * np.sqrt((cg1) / (cg0))
-            self.Hs = self.H0 #set the wave height to the off-shore wave height
+            self.H0 = self.Hs * np.sqrt(cg1 / cg0)
+
 
         # Ensure arrays are of the same size
         if len(set(x.size for x in [self.Hs, self.Tp, self.beta, self.Lp])) != 1:
@@ -114,7 +114,7 @@ class RunupModel(metaclass=ABCMeta):
 
         # Calculate Iribarren number. Need since there are different
         # parameterizations for dissipative and intermediate/reflective beaches.
-        self.zeta = self.beta / (self.H0 / self.Lp) ** (0.5)
+        self.zeta = self.beta / (self.Hs / self.Lp) ** (0.5)
 
     def _return_one_or_array(self, val):
         # If only calculating a single value, return a single value and not an array
@@ -234,7 +234,7 @@ class EurOtop2018(RunupModel):
     def R2(self, gamma_f=0.62):
         #calculate H at the toe of the berm using Blenkinsopp2022
         self.est_dberm_Hberm()
-        zeta_toe = self.bberm / (self.Hm0 / self.Lp) ** (0.5)
+        zeta_toe = self.bberm / np.sqrt((2 * np.pi * self.Htoe / (9.81*self.period**2)))
 
         result = self.Htoe * 1.75 * gamma_f * zeta_toe   #where 1.75 is used instead of 1.65 for a design and assessment approach, as suggested in EuroTop2018
         #result = self._return_one_or_array(result)

@@ -19,7 +19,7 @@ class RunupModel(metaclass=ABCMeta):
 
     doi = None
 
-    def __init__(self, Hs=None, Tp=None, beta=None, Lp=None, h=None, r=None, dtoeSWL=None, bsand=None, bberm=None):
+    def __init__(self, Hs=None, Tp=None, beta=None, Lp=None, h=None, r=None, dtoeSWL=None, bsand=None, bberm=None, spectral_wave_period=False):
         """
         Args:
             Hs (:obj:`float` or :obj:`list`): Significant wave height. In order to
@@ -40,6 +40,7 @@ class RunupModel(metaclass=ABCMeta):
             bsand (:obj:'float'or :obj:`list`): slope of the sand fronting the cobble
                 berm revetment.
             bberm (:obj:'float' or :obj:`list`): slope of the cobble revetment.
+            spectral_wave_period (:obj:'boolean'): whether to use the spectral wave period or the peak wave period
         """
 
         self.Hs = Hs
@@ -68,22 +69,44 @@ class RunupModel(metaclass=ABCMeta):
         # Calculate wave length if it hasn't been specified.
         if not Lp:
             self.Tp = np.atleast_1d(Tp)
+            self.period = self.Tp
+            if spectral_wave_period:
+                self.Tm01 = self.Tp / 1.1 #Convert from peak wave period to spectral wave period
+                self.period = self.Tm01
             if self.h:
                 k = []
-                for T in self.Tp:
+                for T in self.period:
                     k.append(self._newtRaph(T, self.h))
                 self.Lp = (2 * np.pi) / np.array(k)
             else:
-                self.Lp = 9.81 * (self.Tp ** 2) / 2 / np.pi
+                self.Lp = 9.81 * (self.period ** 2) / 2 / np.pi
         else:
             self.Lp = np.atleast_1d(Lp)
             if self.h:
-                self.Tp = np.sqrt(
+                self.period = np.sqrt(
                     (2 * np.pi * self.Lp)
                     / (9.81 * np.tanh((2 * np.pi * self.h) / self.Lp))
                 )
             else:
-                self.Tp = np.sqrt(2 * np.pi * self.Lp / 9.81)
+                self.period = np.sqrt(2 * np.pi * self.Lp / 9.81)
+
+        if self.h:
+            #Group celerity in deep water
+            cg0 = (9.81 * self.period) / (4 * np.pi)
+
+            #radial frequency at depth h
+            sigma = (2 * np.pi) / self.period
+
+            #celerity at depth h
+            c1 = sigma / np.array(k)
+
+            #group speed at depth h
+            n = (0.5 + (np.array(k) * h)/np.sinh(2 *np.array(k)*h))
+            cg1 = c1 * n
+
+            # Reverse shoal the wave to deep water
+            self.H0 = self.Hs * np.sqrt((cg1) / (cg0))
+            self.Hs = self.H0 #set the wave height to the off-shore wave height
 
         # Ensure arrays are of the same size
         if len(set(x.size for x in [self.Hs, self.Tp, self.beta, self.Lp])) != 1:
@@ -91,7 +114,7 @@ class RunupModel(metaclass=ABCMeta):
 
         # Calculate Iribarren number. Need since there are different
         # parameterizations for dissipative and intermediate/reflective beaches.
-        self.zeta = self.beta / (self.Hs / self.Lp) ** (0.5)
+        self.zeta = self.beta / (self.H0 / self.Lp) ** (0.5)
 
     def _return_one_or_array(self, val):
         # If only calculating a single value, return a single value and not an array
@@ -130,6 +153,46 @@ class RunupModel(metaclass=ABCMeta):
 
         return k2
 
+    def est_dberm_Hberm(self):
+        '''
+        This function returns water depth and wave height at the toe of the berm using the calculations in Blenkinsopp, 2022.
+        First it estimates the surf zone length using both the slopes of the offshore beach (bsand) and the revetment (bberm).
+        It then stores the set up, length of the surf zone, depth and wave height at the toe of the structure in the class.
+
+        Args:
+            dtoeSWL (:obj:`float` or :obj:`list`): Vertical elevation difference between berm toe and SWL (m)
+                the nearshore, then reverse-shoal to deep water.
+            bsand (:obj:`float` or :obj:`list`): angle of the mean beach slope and horizontal.
+            bberm (:obj:`float` or :obj:`list`): angle of the mean berm slope and horizontal.
+
+        Returns:
+            Nothing, but stores objects in the class.
+                lsz (:obj:'float'): surf zone length
+                setup_toe (:obj:'float'): setup at the toe of the structure
+                dtoe (:obj:'float'): depth at the toe of the structure
+                Htoe (:obj:'float'): wave height at the toe of the structure
+
+        '''
+        #Check that you have all the parameterse
+        if len(set(x.size for x in [self.dtoeSWL, self.bberm, self.bsand])) != 1:
+            raise ValueError("Input arrays are not the same length")
+
+        #Estimate the water depth at the berm toe, which requires estimating the setup at the toe of the berm.
+        #First estimate surf zone length (eq. 13)
+        self.lsz = (5/3 * self.H0 - self.dtoeSWL) / np.tan(self.bsand) + self.dtoeSWL / np.tan(self.bberm)
+        # if np.any(self.lsz<0):
+        #     raise ValueError("Negative surf zone length, non-sensical")
+
+        #Estimate setup at the toe of the berm (eq.22)
+        self.setup_toe = 3.33E-4 * self.lsz + 0.12
+
+        #Estimate depth at the toe of the berm as a superposition of setup and SWL depth
+        self.dtoe = self.dtoeSWL + self.setup_toe
+
+        #Estimate wave height at the berm. the coefficient 0.87 was derived using their datsets and could be perturbed for uncertainty estimations
+        self.Htoe = 0.87 * self.dtoe
+
+
 class Blenkinsopp2022(RunupModel):
     """
     Implements the runup model from Blenkinsopp et al (2022).
@@ -142,46 +205,42 @@ class Blenkinsopp2022(RunupModel):
         The first method uses superposition of mean setup level and depth at the toe of the berm.
         The second method explicitly estimates infragravity and short wave swash components.
         Thereafter, estimates setup at the toe of the berm.
-    Args:
-        dtoeSWL (:obj:`float` or :obj:`list`): Vertical elevation difference between berm toe and SWL (m)
-            the nearshore, then reverse-shoal to deep water.
-        bsand (:obj:`float` or :obj:`list`): angle of the mean beach slope and horizontal.
-        bberm (:obj:`float` or :obj:`list`): angle of the mean berm slope and horizontal.
-
     """
-    def est_dberm(self):
-        #Check that you have all the parameterse
-        if len(set(x.size for x in [self.dtoeSWL, self.bberm, self.bsand])) != 1:
-            raise ValueError("Input arrays are not the same length")
-
-        #Estimate the water depth at the berm toe, which requires estimating the setup at the toe of the berm.
-        #First estimate surf zone length (eq. 13)
-        self.lsz = (5/3 * self.Hs - self.dtoeSWL) / np.tan(self.bsand) + self.dtoeSWL / np.tan(self.bberm)
-        if np.any(self.lsz<0):
-            raise ValueError("Negative surf zone length, non-sensical")
-
-        #Estimate setup at the toe of the berm (eq.22)
-        self.setup_toe = 3.33E-4 * self.lsz + 0.12
-
-        #Estimate depth at the toe of the berm as a superposition of setup and SWL depth
-        self.dtoe = self.dtoeSWL + self.setup_toe
-
-
     @property
     def R2_eq21(self):
         """
         R2% using equation 21
         """
-        self.est_dberm()
-        #Estimate wave height at the berm. the coefficient 0.87 was derived using their datsets and could be perturbed for uncertainty estimations
-        self.Htoe = 0.87 * self.dtoe
+        self.est_dberm_Hberm()
 
-        result = 0.19 * self.Hs + 3.11 * self.Htoe * np.tan(self.bberm) + 0.26
+        result = 0.19 * self.H0 + 3.11 * self.Htoe * np.tan(self.bberm) + 0.26
         result = self._return_one_or_array(result)
         return result
 
-    # @property
-    # def R2_eq23(self):
+class EurOtop2018(RunupModel):
+    """
+    Implements the runup equation from EuroTop 2018 Guidelines:
+
+    Uses the Hm0 at the toe of the barrier, Htoe. Htoe can be derived by using the equations from Blenkinsopp, or
+    transforming the wave to the water depth at the toe of the barrier using the charts in EuroTop2018, Figure 2.4.
+    By default, it uses the equations from Blenkinsopp (see function est_dberm_Hberm above).
+
+    Args:
+        gamma_f (:obj:'float'): friction factor for rubble, default is 0.62 which is taken from Zaalberg, 2019.
+        Htoe
+
+    """
+    #@property
+    def R2(self, gamma_f=0.62):
+        #calculate H at the toe of the berm using Blenkinsopp2022
+        self.est_dberm_Hberm()
+        zeta_toe = self.bberm / (self.Hm0 / self.Lp) ** (0.5)
+
+        result = self.Htoe * 1.75 * gamma_f * zeta_toe   #where 1.75 is used instead of 1.65 for a design and assessment approach, as suggested in EuroTop2018
+        #result = self._return_one_or_array(result)
+
+        return result
+
 
 
 
@@ -691,7 +750,7 @@ class Beuzen2019(RunupModel):
                 model = joblib.load(f)
 
         result = np.squeeze(
-            model.predict(np.column_stack((self.Hs, self.Tp, self.beta)))
+            model.predict(np.column_stack((self.Hs, self.period, self.beta)))
         )
         result = self._return_one_or_array(result)
         return result
@@ -750,7 +809,7 @@ class Passarella2018(RunupModel):
         """
         result = (
             (146.737 * (self.beta ** 2))
-            + ((self.Tp * (self.Hs ** 3)) / (5.800 + (10.595 * (self.Hs ** 3))))
+            + ((self.period * (self.Hs ** 3)) / (5.800 + (10.595 * (self.Hs ** 3))))
             - 4397.838 * (self.beta ** 4)
         )
         result = self._return_one_or_array(result)

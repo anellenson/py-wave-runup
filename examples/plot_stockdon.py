@@ -37,13 +37,11 @@ import py_wave_runup
 df = py_wave_runup.datasets.load_power18()
 print(df.head())
 # add depth, berm and sand slopes for Blenkinsopp
-dtoeSWL_deep = np.ones(df.shape[0]) * 1
 dtoeSWL = np.ones(df.shape[0]) * 0.1
 bberm = np.ones(df.shape[0]) * 0.12
 bsand = np.ones(df.shape[0]) * 0.008
 
 df['dtoeSWL'] = dtoeSWL
-df['dtoeSWL_deep'] = dtoeSWL_deep
 df['bberm'] = bberm
 df['bsand'] = bsand
 
@@ -56,10 +54,12 @@ df['bsand'] = bsand
 # Initalize the Stockdon 2006 model with values from the dataset
 sto06 = py_wave_runup.models.Stockdon2006(Hs=df.hs, Tp=df.tp, beta=df.beta)
 blen22 = py_wave_runup.models.Blenkinsopp2022(Hs=df.hs, Tp=df.tp, beta=df.beta, dtoeSWL=df.dtoeSWL, bberm=df.bberm, bsand=df.bsand)
+eurotop = py_wave_runup.models.EurOtop2018(Hs=df.hs,beta=df.bberm,Tp=df.tp,bberm=df.bberm,bsand=df.bsand, dtoeSWL =df.dtoeSWL, spectral_wave_period=True)
 
 # Append a new column at the end of our dataset with Stockdon 2006 R2 estimations
 df["sto06_r2"] = sto06.R2
 df["blen22"] = blen22.R2_eq21
+df["TAW"] = eurotop.R2(gamma_f=0.75)
 
 #############################################
 # Now let's create a plot of observed R2 values vs. predicted R2 values:
@@ -68,6 +68,7 @@ df["blen22"] = blen22.R2_eq21
 fig, ax1 = plt.subplots(1, 1, figsize=(4, 4), dpi=300)
 ax1.plot(df.r2, df.sto06_r2, "b.", markersize=2, linewidth=0.5)
 ax1.plot(df.r2, df.blen22, "r.", markersize=2, marker='^', linewidth=0.5)
+ax1.plot(df.r2, df.TAW, "g.", markersize=2, marker='*', linewidth=0.5)
 # Add 1:1 line to indicate perfect fit
 ax1.plot([0, 12], [0, 12], "k-")
 

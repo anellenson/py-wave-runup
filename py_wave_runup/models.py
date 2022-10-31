@@ -106,6 +106,7 @@ class RunupModel(metaclass=ABCMeta):
 
             # Reverse shoal the wave to deep water
             self.H0 = self.Hs * np.sqrt(cg1 / cg0)
+            self.Lp = 9.81 * (self.period**2) / 2 / np.pi
 
             #store offshore wave height as wave height to use
             self.Hs = self.H0
@@ -183,11 +184,14 @@ class RunupModel(metaclass=ABCMeta):
         #Estimate the water depth at the berm toe, which requires estimating the setup at the toe of the berm.
         #First estimate surf zone length (eq. 13)
         self.lsz = (5/3 * self.Hs - self.dtoeSWL) / np.tan(self.bsand) + self.dtoeSWL / np.tan(self.bberm)
-        # if np.any(self.lsz<0):
-        #     raise ValueError("Negative surf zone length, non-sensical")
+        if np.any(self.lsz<0):
+            raise ValueError("Negative surf zone length, non-sensical")
 
         #Estimate setup at the toe of the berm (eq.22)
-        self.setup_toe = 3.33E-4 * self.lsz + 0.12
+        #self.setup_toe = 3.33E-4 * self.lsz + 0.12
+        #Estimate setup at the toe of the berm:
+        Hb = self.Hs * 0.78
+        self.setup_toe = 0.189 * Hb - 0.186 * self.dtoeSWL
 
         #Estimate depth at the toe of the berm as a superposition of setup and SWL depth
         self.dtoe = self.dtoeSWL + self.setup_toe
@@ -220,6 +224,7 @@ class Blenkinsopp2022(RunupModel):
         result = self._return_one_or_array(result)
         return result
 
+
 class EurOtop2018(RunupModel):
     """
     Implements the runup equation from EuroTop 2018 Guidelines:
@@ -237,10 +242,11 @@ class EurOtop2018(RunupModel):
     def R2(self, gamma_f=0.62):
         #calculate H at the toe of the berm using Blenkinsopp2022
         self.est_dberm_Hberm()
-        zeta_toe = self.bberm / np.sqrt((2 * np.pi * self.Htoe / (9.81*self.period**2)))
+        self.zeta_toe = self.bberm / np.sqrt((2 * np.pi * self.Htoe / (9.81*self.period**2)))
+        high_zeta_mask = self.zeta_toe > 1.8
 
-        result = self.Htoe * 1.75 * gamma_f * zeta_toe   #where 1.75 is used instead of 1.65 for a design and assessment approach, as suggested in EuroTop2018
-        #result = self._return_one_or_array(result)
+        result = self.Htoe * 1.75 * gamma_f * self.zeta_toe   #where 1.75 is used instead of 1.65 for a design and assessment approach, as suggested in EuroTop2018
+        result[high_zeta_mask] = self.Htoe * gamma_f * (4.3-1.6/np.sqrt(self.zeta_toe)) #for beaches with high zeta
 
         return result
 
@@ -603,7 +609,8 @@ class Ruggiero2001(RunupModel):
                 .. math:: R_{2} = 0.27 \\sqrt{\\beta H_{s} L_{p}}
         """
 
-        result = 0.27 * np.sqrt(self.beta * self.Hs * self.Lp)
+#        result = 0.27 * np.sqrt(self.beta * self.Hs * self.Lp)
+        result = 0.5*self.Hs-0.22
         result = self._return_one_or_array(result)
         return result
 

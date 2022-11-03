@@ -4,65 +4,143 @@ import pandas as pd
 import py_wave_runup
 import seaborn as sns
 
-#Validate with two points on dtoe*tanberm
+#Wave dataset
 Tp_returnvals = pd.read_csv('data\Tp_return_vals.csv')
 Tp=np.reshape(Tp_returnvals.drop(columns='return period').values, (15,))
 Hs_returnvals = pd.read_csv('data\Hs_return_vals.csv')
 Hs=np.reshape(Hs_returnvals.drop(columns='return period').values, (15,))
-bberm = [0.14]*Hs.shape[0]
-bsand = [0.012]*Hs.shape[0]
-dtoeSWL = [0.8]*Hs.shape[0]
+
+#Transect data
+existing = 'data\Adamson_M_Z_existing.csv'
+existing_data = pd.read_csv(existing)
+
 returnperiod = [5]*3 + [10] * 3 + [20]*3 + [50]*3 + [100]*3
-df = pd.DataFrame({'hs':Hs, 'tp':Tp, 'bsand':bsand,'bberm':bberm, 'dtoeSWL':dtoeSWL})
-blen22 = py_wave_runup.models.Blenkinsopp2022(Hs=df.hs,beta=df.bberm,Tp=df.tp,bberm=df.bberm,bsand=df.bsand,spectral_wave_period=True, dtoeSWL =df.dtoeSWL,h=10)
-eurotop = py_wave_runup.models.EurOtop2018(Hs=df.hs,beta=df.bberm,Tp=df.tp,bberm=df.bberm,bsand=df.bsand, dtoeSWL =df.dtoeSWL, spectral_wave_period=True,h=10)
-stock = py_wave_runup.models.Stockdon2006(Hs=df.hs,beta=df.bberm,Tp=df.tp,bberm=df.bberm,bsand=df.bsand, dtoeSWL =df.dtoeSWL, spectral_wave_period=True,h=10)
-rug01 = py_wave_runup.models.Ruggiero2001(Hs=df.hs,beta=df.bberm,Tp=df.tp,bberm=df.bberm,bsand=df.bsand, dtoeSWL =df.dtoeSWL, spectral_wave_period=True,h=10)
+returnperiod = np.tile(returnperiod, existing_data['beta'].unique().shape[0])
+Hs_repeated = np.tile(Hs, existing_data['beta'].unique().shape[0])
+Tp_repeated = np.tile(Tp, existing_data['beta'].unique().shape[0])
 
-df_eurotop = df.copy(deep=True)
-df_stock = df.copy(deep=True)
-df_rug = df.copy(deep=True)
+beta = []
+transect = []
+for tt,bb in zip(existing_data.Transect, existing_data.beta):
+    transect += [tt]*len(Hs)
+    beta += [bb]*len(Hs)
 
-df['r2'] =  blen22.R2_eq21*3.3
-df['method'] = 'Blenkinsopp'
-df['return period'] = returnperiod
+df = pd.DataFrame({'hs':Hs_repeated, 'tp':Tp_repeated, 'beta':beta, 'transect':transect, 'returnperiod':returnperiod})
+df['beta'] = df.beta.values.round(3)
+stock = py_wave_runup.models.Stockdon2006(Hs=df.hs,beta=df.beta,Tp=df.tp,spectral_wave_period=True,h=10)
 
-df_eurotop['r2'] =  eurotop.R2(gamma_f=0.75)*3.3
-df_eurotop['method'] = 'TAW'
-df_eurotop['return period'] = returnperiod
+df['r2'] = stock.R2*3.3
+df['method'] = 'Stockdon'
 
-df_stock['r2'] = stock.R2*3.3
-df_stock['method'] = 'Stockdon'
-df_stock['return period'] = returnperiod
+fig, ax = pl.subplots(3,1, tight_layout = {'rect':[0,0,1,0.98]})
+fig.set_size_inches(3,9)
+pl.tight_layout()
+for i in range(3):
+    sns.barplot(x='returnperiod',y='r2',hue='beta',data=df[df.transect == i+1], ax =ax[i])
+    ax[i].set_xlabel('return period (yrs)')
+    ax[i].set_ylabel('r2% (ft)')
+    ax[i].set_ylim((0,12))
+    ax[i].set_title('Transect {0}'.format(i+1))
+    legend_labels, _= ax[i].get_legend_handles_labels()
+    ax[i].legend(title=r'$\beta_{sand}$')
 
-df_rug['r2'] = rug01.R2*3.3
-df_rug['method'] = 'Ruggiero2001'
-df_rug['return period'] = returnperiod
+    if i < 2:
+        ax[i].set_xticks([])
+        ax[i].set_xlabel('')
+pl.suptitle("Stockdon Existing Transect")
+pl.savefig('stockdon_existing.png')
+########
+''' Design conditions '''
+design = 'data\Adamson_M_Z_design.csv'
+import itertools
+design_data = pd.read_csv(design)
+transectnums = []
+paramsdict = {'bberm':[], 'bsand':[],'dtoeSWL':[]}
+hs = []
+tp = []
+returnperiod = []
+for i in design_data.transect.unique():
+    num_unique_conds = design_data[design_data.transect==i].bsand.unique().shape[0]*design_data[design_data.transect==i].bberm.unique().shape[0]*design_data[design_data.transect==i].dtoeSWL.unique().shape[0]
+    rp1 = [5]*3 + [10] * 3 + [20]*3 + [50]*3 + [100]*3
+    rp = np.tile(rp1, num_unique_conds)
+    Hs_repeated = np.tile(Hs, num_unique_conds)
+    Tp_repeated = np.tile(Tp, num_unique_conds)
+    returnperiod += list(rp)
+    hs += list(Hs_repeated)
+    tp += list(Tp_repeated)
+    bbermlist = design_data[(design_data.transect==i)]['bberm'].unique()
+    bsandlist = design_data[design_data.transect==i]['bsand'].unique()
+    dtoelist = design_data[design_data.transect==i]['dtoeSWL'].unique()
+    res = list(itertools.product(*[bbermlist, bsandlist, dtoelist, Hs]))
+    for pi,param in enumerate(['bberm', 'bsand', 'dtoeSWL']):
+        paramsdict[param] += [res[i][pi] for i in range(len(res))]
+    transectnums += [i]*len(Hs_repeated)
 
+df = pd.DataFrame({'hs':hs, 'tp':tp, 'beta':paramsdict['bberm'],'bberm':paramsdict['bberm'],'bsand':paramsdict['bsand'],'dtoeSWL':paramsdict['dtoeSWL'],'transect':transectnums,'returnperiod':returnperiod})
 
-df = pd.concat((df, df_eurotop,df_stock))
+df['beta'] = df.bberm.values.round(3)
+df['bsand'] = df.bsand.values.round(3)
+df['bberm'] = df.bberm.values.round(3)
+df['dtoeSWL'] = np.round(df.dtoeSWL.values/3.3,3)
 
-with open('df_setup_blenkinsopp.pickle', 'rb') as f:
-    df_blenset = pickle.load(f)
+blen = py_wave_runup.models.Blenkinsopp2022(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
+euro = py_wave_runup.models.EurOtop2018(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
+poate = py_wave_runup.models.Poate2016(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
+df['r2'] = blen.R2_eq21*3.3
+df['r2_euro'] = euro.R2(gamma_f=0.75)*3.3
 
-df_blenset['setup_method'] = 'Blenkinsopp fit'
-df['setup_method'] = 'FEMA estimation'
+df_poate = df.copy(deep=True)
+df_poate_coarse = df.copy(deep=True)
+df_poate['r2'] = poate.R2()*3.3
+df_poate['D50'] = 0.1024
+df_poate_coarse['r2'] = poate.R2(D50=.152)*3.3
+df_poate_coarse['D50'] = 0.152
+df_full = pd.concat((df_poate_coarse, df_poate))
 
-df = pd.concat((df,df_blenset))
-df.drop(df[df.method == 'Stockdon'])
 fig, ax = pl.subplots(1,1)
-sns.barplot(x='method',y='r2',hue='setup_method',data=df)
-ax.set_xlabel('return period (yrs)')
-ax.set_ylabel('r2% (ft)')
-pl.legend(bbox_to_anchor=(.6, 1.1),ncol=2)
+sns.barplot(x='returnperiod',y='r2',data=df_full[df_full.transect==1],hue='D50')
+ax.set_title('Poate Runup Values with Different D50 \n Transect 1 Both Slopes')
+ax.set_ylabel('R2% [m]')
+ax.set_xlabel('Return Period [yrs]')
+ax.legend(title = 'D50 [m]')
+pl.savefig('Poate2016_D50Comparison.png')
 
-with open('blenkinsopp2022_setup.pickle', 'rb') as f:
-    blensetup = pickle.load(f)
+fig, ax = pl.subplots(3,2,tight_layout = {'rect':[0,0,1,0.98]})
+fig.set_size_inches((7,7))
+pl.tight_layout()
+a = sns.barplot(x='returnperiod',y='r2',data=df[(df.bsand==0.085)&(df.bberm==0.25)],ax =ax[0,0],hue='dtoeSWL')
+sns.barplot(x='returnperiod',y='r2_euro',data=df[(df.bsand==0.085)&(df.bberm==0.25)],ax =ax[1,0],hue='dtoeSWL')
+sns.barplot(x='returnperiod',y='r2_poate',data=df[(df.bsand==0.085)&(df.bberm==0.25)],ax =ax[2,0],hue='dtoeSWL')
 
-blensetup = blensetup['eta']
-pl.figure()
-pl.scatter(Hs, blensetup, marker = '*')
-pl.scatter(Hs, blen22.setup_toe, marker = '^')
-pl.xlabel('Hs [m]')
-pl.ylabel(r'$\overline{\eta}$')
-pl.legend(('Blenkinsopp 2022 Fit', 'FEMA guidelines'))
+sns.barplot(x='returnperiod',y='r2',data=df[(df.bsand==0.085)&(df.bberm==0.14)],ax =ax[0,1],hue='dtoeSWL')
+sns.barplot(x='returnperiod',y='r2_euro',data=df[(df.bsand==0.085)&(df.bberm==0.14)],ax =ax[1,1],hue='dtoeSWL')
+sns.barplot(x='returnperiod',y='r2_poate',data=df[(df.bsand==0.085)&(df.bberm==0.14)],ax =ax[2,1],hue='dtoeSWL')
+for i in range(6):
+    ax.ravel('F')[i].set_ylim((0,15))
+    if i >0:
+        ax.ravel('F')[i].get_legend().remove()
+    if i == 0:
+        legend_labels, _= ax.ravel('F')[i].get_legend_handles_labels()
+        ax.ravel('F')[i].legend(legend_labels,['2ft','3ft','4ft'],title=r'$d_{toe,SWL}$',ncol=3)
+ax[0,0].set_xlabel('')
+ax[0,1].set_xlabel('')
+ax[1,0].set_ylabel('')
+ax[1,1].set_ylabel('')
+ax[1,1].set_xlabel('')
+ax[1,0].set_xlabel('')
+ax[2,1].set_ylabel('')
+ax[0,0].set_ylabel('Blenkinsopp R2% [ft]')
+ax[1,0].set_ylabel('TAW R2% [ft]')
+ax[2,0].set_ylabel('Poate R2% [ft]')
+ax[2,0].set_xlabel('Return Period (yrs)')
+ax[2,1].set_xlabel('Return Period (yrs)')
+ax[0,0].set_title(r'$\beta_{berm} = 1:4$')
+ax[0,1].set_title(r'$\beta_{berm} = 1:7$')
+pl.suptitle('Transect 1')
+pl.savefig('Transect1_design_alternatives.png')
+
+pl.tight_layout()
+for bi,bermval in enumerate(df.bberm.unique()):
+    for ri,rp in enumerate(df.returnperiod.unique()):
+        r2vals = df[(df.transect==i+1)&(df.bberm==bermval)&(df.returnperiod==rp)].pivot_table(columns="bsand",index="dtoeSWL",values="r2")
+        b=sns.heatmap(data=r2vals,ax=ax[ri,bi],vmin=0,vmax=3)

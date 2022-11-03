@@ -188,10 +188,10 @@ class RunupModel(metaclass=ABCMeta):
             raise ValueError("Negative surf zone length, non-sensical")
 
         #Estimate setup at the toe of the berm (eq.22)
-        #self.setup_toe = 3.33E-4 * self.lsz + 0.12
+        self.setup_toe = 3.33E-4 * self.lsz + 0.12
         #Estimate setup at the toe of the berm:
-        Hb = self.Hs * 0.78
-        self.setup_toe = 0.189 * Hb - 0.186 * self.dtoeSWL
+        # Hb = self.Hs * 0.78
+        # self.setup_toe = 0.189 * Hb - 0.186 * self.dtoeSWL
 
         #Estimate depth at the toe of the berm as a superposition of setup and SWL depth
         self.dtoe = self.dtoeSWL + self.setup_toe
@@ -250,8 +250,28 @@ class EurOtop2018(RunupModel):
 
         return result
 
+class Poate2016(RunupModel):
+    """
+    Implements the runup equation from Poate 2016:
 
+        Poate, T. G., McCall, R. T., & Masselink, G. (2016).
+        A new parameterisation for runup on gravel beaches.
+        Coastal Engineering, 117, 176-190. https://doi.org/10.1016/j.coastaleng.2016.08.003
 
+    This formulation implicitly includes setup from the field observations; no distinction was made for setup.
+
+    Args:
+        D50 (:obj:'float'): D50 in meters for gravel
+        Hs (:obj:'float'): Offshore wave height.
+        bberm (:obj:'float'): Slope of the berm
+        period (:obj:'float'): spectral wave period
+
+    """
+    def R2(self, D50=.1024):
+        #Calculate H at the toe of the berm using Blenkinsopp2022
+        self.est_dberm_Hberm()
+        result = 0.21 * D50**(-0.15) * np.tan(self.bberm)**0.5 * self.Htoe * self.period
+        return result
 
 class Stockdon2006(RunupModel):
     """

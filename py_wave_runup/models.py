@@ -66,29 +66,17 @@ class RunupModel(metaclass=ABCMeta):
         self.bsand = np.atleast_1d(bsand).astype(float)
         self.bberm = np.atleast_1d(bberm).astype(float)
 
-        # Calculate wave length if it hasn't been specified.
-        if not Lp:
-            self.Tp = np.atleast_1d(Tp)
+        # Calculate offshore wave height and wave length
+        if spectral_wave_period:
+            self.Tm01 = self.Tp / 1.1 #Convert from peak wave period to spectral wave period
+            self.period = self.Tm01
+
+        if not spectral_wave_period:
             self.period = self.Tp
-            if spectral_wave_period:
-                self.Tm01 = self.Tp / 1.1 #Convert from peak wave period to spectral wave period
-                self.period = self.Tm01
-            if self.h:
-                k = []
-                for T in self.period:
-                    k.append(self._newtRaph(T, self.h))
-                self.Lp = (2 * np.pi) / np.array(k)
-            else:
-                self.Lp = 9.81 * (self.period ** 2) / 2 / np.pi
-        else:
-            self.Lp = np.atleast_1d(Lp)
-            if self.h:
-                self.period = np.sqrt(
-                    (2 * np.pi * self.Lp)
-                    / (9.81 * np.tanh((2 * np.pi * self.h) / self.Lp))
-                )
-            else:
-                self.period = np.sqrt(2 * np.pi * self.Lp / 9.81)
+
+        #Calculate deep water wave length
+        self.L0 = 9.81 * (self.period**2) / 2 / np.pi
+
 
         if self.h:
             #Group celerity in deep water
@@ -106,7 +94,6 @@ class RunupModel(metaclass=ABCMeta):
 
             # Reverse shoal the wave to deep water
             self.H0 = self.Hs * np.sqrt(cg1 / cg0)
-            self.Lp = 9.81 * (self.period**2) / 2 / np.pi
 
             #store offshore wave height as wave height to use
             self.Hs = self.H0
@@ -208,10 +195,9 @@ class Blenkinsopp2022(RunupModel):
         Wave runup on composite beaches and dynamic cobble berm revetments. Coastal Engineering, 104148.
         https://doi.org/10.1016/j.coastaleng.2022.104148
 
-        Calculates 2% runup level at cobble berm revetments given the slope of the berm and the dissipative sand fronting the berm.
-        The first method uses superposition of mean setup level and depth at the toe of the berm.
-        The second method explicitly estimates infragravity and short wave swash components.
-        Thereafter, estimates setup at the toe of the berm.
+    Calculates 2% runup level at cobble berm revetments given the slope of the berm and the dissipative sand fronting the berm.
+    The first method uses superposition of mean setup level and depth at the toe of the berm.
+    Then estimates setup at the toe of the berm.
     """
     @property
     def R2_eq21(self):
@@ -235,7 +221,8 @@ class EurOtop2018(RunupModel):
 
     Args:
         gamma_f (:obj:'float'): friction factor for rubble, default is 0.62 which is taken from Zaalberg, 2019.
-        Htoe
+        Htoe (:obj:'float'): wave height at the toe of the barrier
+        bberm (:obj:'float'): slope of the berm/structure
 
     """
     #@property

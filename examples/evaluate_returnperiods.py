@@ -88,22 +88,7 @@ euro = py_wave_runup.models.EurOtop2018(Hs=df.hs,beta=df.beta,bsand=df.bsand,bbe
 poate = py_wave_runup.models.Poate2016(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
 df['r2'] = blen.R2_eq21*3.3
 df['r2_euro'] = euro.R2(gamma_f=0.75)*3.3
-
-df_poate = df.copy(deep=True)
-df_poate_coarse = df.copy(deep=True)
-df_poate['r2'] = poate.R2()*3.3
-df_poate['D50'] = 0.1024
-df_poate_coarse['r2'] = poate.R2(D50=.152)*3.3
-df_poate_coarse['D50'] = 0.152
-df_full = pd.concat((df_poate_coarse, df_poate))
-
-fig, ax = pl.subplots(1,1)
-sns.barplot(x='returnperiod',y='r2',data=df_full[df_full.transect==1],hue='D50')
-ax.set_title('Poate Runup Values with Different D50 \n Transect 1 Both Slopes')
-ax.set_ylabel('R2% [m]')
-ax.set_xlabel('Return Period [yrs]')
-ax.legend(title = 'D50 [m]')
-pl.savefig('Poate2016_D50Comparison.png')
+df['r2_poate'] = poate.R2(D50=.102)*3.3
 
 fig, ax = pl.subplots(3,2,tight_layout = {'rect':[0,0,1,0.98]})
 fig.set_size_inches((7,7))

@@ -79,6 +79,10 @@ class RunupModel(metaclass=ABCMeta):
 
 
         if self.h:
+            #find wave number, k
+            k=[]
+            for T in self.period:
+                    k.append(self._newtRaph(T, self.h))
             #Group celerity in deep water
             cg0 = (9.81 * self.period) / (4 * np.pi)
 
@@ -100,12 +104,12 @@ class RunupModel(metaclass=ABCMeta):
 
 
         # Ensure arrays are of the same size
-        if len(set(x.size for x in [self.Hs, self.Tp, self.beta, self.Lp])) != 1:
+        if len(set(x.size for x in [self.Hs, self.Tp, self.beta, self.L0])) != 1:
             raise ValueError("Input arrays are not the same length")
 
         # Calculate Iribarren number. Need since there are different
         # parameterizations for dissipative and intermediate/reflective beaches.
-        self.zeta = self.beta / (self.Hs / self.Lp) ** (0.5)
+        self.zeta = self.beta / (self.Hs / self.L0) ** (0.5)
 
     def _return_one_or_array(self, val):
         # If only calculating a single value, return a single value and not an array
@@ -304,14 +308,14 @@ class Stockdon2006(RunupModel):
 
         # Generalized runup (Eqn 19)
         result = 1.1 * (
-            0.35 * self.beta * (self.Hs * self.Lp) ** 0.5
-            + ((self.Hs * self.Lp * (0.563 * self.beta ** 2 + 0.004)) ** 0.5) / 2
+            0.35 * self.beta * (self.Hs * self.L0) ** 0.5
+            + ((self.Hs * self.L0 * (0.563 * self.beta ** 2 + 0.004)) ** 0.5) / 2
         )
 
         # For dissipative beaches (Eqn 18)
         dissipative_mask = self.zeta < 0.3
         result[dissipative_mask] = (
-            0.043 * (self.Hs[dissipative_mask] * self.Lp[dissipative_mask]) ** 0.5
+            0.043 * (self.Hs[dissipative_mask] * self.L0[dissipative_mask]) ** 0.5
         )
 
         result = self._return_one_or_array(result)

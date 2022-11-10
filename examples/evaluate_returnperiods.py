@@ -5,69 +5,32 @@ import pandas as pd
 import py_wave_runup
 import seaborn as sns
 
-def load_design_data(designcsvname, Hs, Tp, returnperiod):
+def load_scenario_data(scenariocsv, Hs, Tp, returnperiod):
     '''
-    Loads the design data from the design csv.
+    Loads the design data from the scenario csv.
     Args:
     -----
-    designcsvname:  filename of the csv with design slopes
+    scenariocsv:    filename of the csv with scenario information
     Hs:             l x 1, Tp, where the values are for each return year: 95-ci, 95, 95+ci
     Tp:             l x 1, Hs, where the values are for each return year: 95-ci, 95, 95+ci
     ReturnPeriod:   l x 1, return period, signifying return year period for each value for Hs and Tp, e.g., 5 5 5 10 10 10
     '''
 
-    import itertools
-    design_data = pd.read_csv(designcsvname)
-    transectnums = []
-    paramsdict = {'bberm':[], 'bsand':[],'dtoeSWL':[]}
-    hs = []
-    tp = []
-    rplist = []
-    sclist = []
-    for i in design_data.transect.unique():
-        num_unique_conds = design_data[design_data.transect==i].bsand.unique().shape[0]*design_data[design_data.transect==i].bberm.unique().shape[0]*design_data[design_data.transect==i].dtoeSWL.unique().shape[0]
-        rp = np.tile(returnperiod, num_unique_conds)
-        Hs_repeated = np.tile(Hs, num_unique_conds)
-        Tp_repeated = np.tile(Tp, num_unique_conds)
-        rplist += list(rp)
-        hs += list(Hs_repeated)
-        tp += list(Tp_repeated)
-        sclist = design_data[design_data.transect==i]['scenario'].unique()
-        bbermlist = design_data[(design_data.transect==i)]['bberm'].unique()
-        bsandlist = design_data[design_data.transect==i]['bsand'].unique()
-        dtoelist = design_data[design_data.transect==i]['dtoeSWL'].unique()
-        res = list(itertools.product(*[bbermlist, bsandlist, dtoelist, Hs]))
 
-        for pi,param in enumerate(['bberm', 'bsand', 'dtoeSWL']):
-            paramsdict[param] += [res[i][pi] for i in range(len(res))]
-        transectnums += [i]*len(Hs_repeated)
+    data = pd.read_csv(scenariocsv)
+    returnperiod = np.tile(returnperiod, data.shape[0])
+    Hs_repeated = np.tile(Hs, data.shape[0])
+    Tp_repeated = np.tile(Tp, data.shape[0])
+    #Repeat the row of data for each Hs value
+    data_repeated = np.repeat(data.values, len(Hs), axis = 0)
+    #Concatenate with Hs and Tp
+    full_data = np.concatenate((data_repeated, np.expand_dims(Hs_repeated,axis=1), np.expand_dims(Tp_repeated,axis=1), np.expand_dims(returnperiod,axis=1)), axis = 1)
+    #Turn into dictionary and dataframe
+    df_cols = dict.fromkeys(list(data.columns.values) + ['hs', 'tp', 'returnperiod'])
 
-    df = pd.DataFrame({'hs':hs, 'tp':tp, 'beta':paramsdict['bberm'],'bberm':paramsdict['bberm'],'bsand':paramsdict['bsand'],'dtoeSWL':paramsdict['dtoeSWL'],'transect':transectnums,'returnperiod':rplist, 'scenario':scenario})
-    df['beta'] = df.bberm.values.round(3)
-    df['bsand'] = df.bsand.values.round(3)
-    df['bberm'] = df.bberm.values.round(3)
-    df['dtoeSWL'] = np.round(df.dtoeSWL.values/3.3,3)
-
-    return df
-
-def load_existing_data(existingcsvname, Hs, Tp, returnperiod):
-
-    existing_data = pd.read_csv(existingcsvname)
-    returnperiod = np.tile(returnperiod, existing_data['beta'].unique().shape[0])
-    Hs_repeated = np.tile(Hs, existing_data['beta'].unique().shape[0])
-    Tp_repeated = np.tile(Tp, existing_data['beta'].unique().shape[0])
-
-    paramlist = data.columns
-    beta = []
-    transect = []
-    sclist = []
-    for tt,bb,ss in zip(existing_data.Transect, existing_data.beta, existing_data.scenario):
-        transect += [tt]*len(Hs)
-        beta += [bb]*len(Hs)
-        sclist += [ss]*len(Hs)
-
-    df = pd.DataFrame({'hs':Hs_repeated, 'tp':Tp_repeated, 'beta':beta, 'transect':transect, 'returnperiod':returnperiod, 'scenario':sclist})
+    df = pd.DataFrame(columns = df_cols,data=full_data)
     df['beta'] = df.beta.values.round(3)
+    df['dtoeSWL'] = df.dtoeSWL/3.3 #ft to m
 
     return df
 
@@ -83,45 +46,41 @@ def load_timeseries_data(Hscsv, Tpcsv, slope=1/7, dtoe=3):
     df = pd.DataFrame({'hs':Hs, 'tp':Tp, 'beta':beta, 'bsand':bsand, 'bberm':bberm, 'dtoeSWL':dtoeSWL})
     return df
 
-Tp_returnvals = pd.read_csv('data\Tp_return_vals.csv')
-Tp=np.reshape(Tp_returnvals.drop(columns='return period').values, (15,))
-Hs_returnvals = pd.read_csv('data\Hs_return_vals.csv')
-Hs=np.reshape(Hs_returnvals.drop(columns='return period').values, (15,))
-returnperiod = [5]*3 + [10] * 3 + [20]*3 + [50]*3 + [100]*3
-MHW = 4.3#m
-existing = 'data\Adamson_M_Z_existing.csv'
-design = 'data\Adamson_M_Z_design.csv'
-df_stock = load_existing_data(existing, Hs, Tp, returnperiod)
-df = load_design_data(design, Hs, Tp, returnperiod)
-
-df = pd.concat([df_stock,df])
-
-blen = py_wave_runup.models.Blenkinsopp2022(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
-euro = py_wave_runup.models.EurOtop2018(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
-poate = py_wave_runup.models.Poate2016(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
-stock = py_wave_runup.models.Stockdon2006(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
-
-df_taw = df.copy(deep=True)
-df_poate = df.copy(deep=True)
-df_stock = df.copy(deep=True)
-
-df_stock['r2'] = stock.R2*3.3
-df['r2'] = blen.R2_eq21*3.3
-df_taw['r2'] = euro.R2(gamma_f=0.70)*3.3
-df_poate['r2'] = poate.R2()*3.3
-
-df_poate['method'] = ['Poate 2016'] * len(df.hs)
-df_taw['method'] = ['TAW'] * len(df.hs)
-df['method'] = ['Blenkinsopp 2022'] * len(df.hs)
-df_stock['method'] = ['Stockdon'] * len(df.hs)
-
-df_full = pd.concat([df, df_taw, df_poate, df_stock])
-sns.barplot(x='method',y='r2',data=df_full)
-
-fig, ax = pl.subplots(1,1)
-ax.scatter(df_stock.r2, df_taw.r2, color = 'r')
-ax.scatter(df_stock.r2, df_poate.r2, color = 'b')
-ax.scatter(df_stock.r2, df.r2, color = 'g')
+# Tp_returnvals = pd.read_csv('data\Tp_return_vals.csv')
+# Tp=np.reshape(Tp_returnvals.drop(columns='return period').values, (15,))
+# Hs_returnvals = pd.read_csv('data\Hs_return_vals.csv')
+# Hs=np.reshape(Hs_returnvals.drop(columns='return period').values, (15,))
+# returnperiod = [5]*3 + [10] * 3 + [20]*3 + [50]*3 + [100]*3
+# MHW = 4.3#m
+# scenario = 'data\Adamson_M_Z_scenarios.csv'
+# df = load_scenario_data(scenario, Hs, Tp, returnperiod)
+#
+# blen = py_wave_runup.models.Blenkinsopp2022(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
+# euro = py_wave_runup.models.EurOtop2018(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
+# poate = py_wave_runup.models.Poate2016(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
+# stock = py_wave_runup.models.Stockdon2006(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
+#
+# df_taw = df.copy(deep=True)
+# df_poate = df.copy(deep=True)
+# df_stock = df.copy(deep=True)
+#
+# df_stock['r2'] = stock.R2*3.3
+# df['r2'] = blen.R2_eq21*3.3
+# df_taw['r2'] = euro.R2(gamma_f=0.70)*3.3
+# df_poate['r2'] = poate.R2()*3.3
+#
+# df_poate['method'] = ['Poate 2016'] * len(df.hs)
+# df_taw['method'] = ['TAW'] * len(df.hs)
+# df['method'] = ['Blenkinsopp 2022'] * len(df.hs)
+# df_stock['method'] = ['Stockdon'] * len(df.hs)
+#
+# df_full = pd.concat([df, df_taw, df_poate, df_stock])
+# sns.barplot(x='method',y='r2',data=df_full)
+#
+# fig, ax = pl.subplots(1,1)
+# ax.scatter(df_stock.r2, df_taw.r2, color = 'r')
+# ax.scatter(df_stock.r2, df_poate.r2, color = 'b')
+# ax.scatter(df_stock.r2, df.r2, color = 'g')
 #
 #
 #

@@ -46,35 +46,41 @@ def load_timeseries_data(Hscsv, Tpcsv, slope=1/7, dtoe=3):
     df = pd.DataFrame({'hs':Hs, 'tp':Tp, 'beta':beta, 'bsand':bsand, 'bberm':bberm, 'dtoeSWL':dtoeSWL})
     return df
 
-# Tp_returnvals = pd.read_csv('data\Tp_return_vals.csv')
-# Tp=np.reshape(Tp_returnvals.drop(columns='return period').values, (15,))
-# Hs_returnvals = pd.read_csv('data\Hs_return_vals.csv')
-# Hs=np.reshape(Hs_returnvals.drop(columns='return period').values, (15,))
-# returnperiod = [5]*3 + [10] * 3 + [20]*3 + [50]*3 + [100]*3
-# MHW = 4.3#m
-# scenario = 'data\Adamson_M_Z_scenarios.csv'
-# df = load_scenario_data(scenario, Hs, Tp, returnperiod)
+
+
+Tp_returnvals = pd.read_csv('data\Tp_return_vals.csv')
+Tp=np.reshape(Tp_returnvals.drop(columns='return period').values, (15,))
+Hs_returnvals = pd.read_csv('data\Hs_return_vals.csv')
+Hs=np.reshape(Hs_returnvals.drop(columns='return period').values, (15,))
+returnperiod = [5]*3 + [10] * 3 + [20]*3 + [50]*3 + [100]*3
+MHW = 4.3#m
+scenario = 'data\Adamson_M_Z_scenarios.csv'
+df = load_scenario_data(scenario, Hs, Tp, returnperiod)
 #
-# blen = py_wave_runup.models.Blenkinsopp2022(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
-# euro = py_wave_runup.models.EurOtop2018(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
-# poate = py_wave_runup.models.Poate2016(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
-# stock = py_wave_runup.models.Stockdon2006(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
-#
-# df_taw = df.copy(deep=True)
-# df_poate = df.copy(deep=True)
-# df_stock = df.copy(deep=True)
-#
-# df_stock['r2'] = stock.R2*3.3
-# df['r2'] = blen.R2_eq21*3.3
-# df_taw['r2'] = euro.R2(gamma_f=0.70)*3.3
-# df_poate['r2'] = poate.R2()*3.3
-#
-# df_poate['method'] = ['Poate 2016'] * len(df.hs)
-# df_taw['method'] = ['TAW'] * len(df.hs)
-# df['method'] = ['Blenkinsopp 2022'] * len(df.hs)
-# df_stock['method'] = ['Stockdon'] * len(df.hs)
-#
-# df_full = pd.concat([df, df_taw, df_poate, df_stock])
+df_stock = df.copy(deep=True)
+df_stock = df_stock.loc[(df_stock.scenario == 1) | (df_stock.scenario==2)]
+df = df.loc[(df.scenario==3) | (df.scenario==4)]
+
+blen = py_wave_runup.models.Blenkinsopp2022(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
+euro = py_wave_runup.models.EurOtop2018(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
+poate = py_wave_runup.models.Poate2016(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
+stock = py_wave_runup.models.Stockdon2006(Hs=df.hs,beta=df.beta,bsand=df.bsand,bberm=df.bberm,dtoeSWL=df.dtoeSWL,Tp=df.tp,spectral_wave_period=True,h=10)
+
+df_taw = df.copy(deep=True)
+df_poate = df.copy(deep=True)
+df_stock = df.copy(deep=True)
+
+df_stock['r2'] = stock.R2*3.3
+df['r2'] = blen.R2_eq21*3.3
+df_taw['r2'] = euro.R2(gamma_f=0.70)*3.3
+df_poate['r2'] = poate.R2()*3.3
+
+df_poate['method'] = ['Poate 2016'] * len(df.hs)
+df_taw['method'] = ['TAW'] * len(df.hs)
+df['method'] = ['Blenkinsopp 2022'] * len(df.hs)
+df_stock['method'] = ['Stockdon'] * len(df.hs)
+
+df_full = pd.concat([df, df_taw, df_poate, df_stock])
 # sns.barplot(x='method',y='r2',data=df_full)
 #
 # fig, ax = pl.subplots(1,1)

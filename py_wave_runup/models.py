@@ -314,9 +314,8 @@ class Stockdon2006(RunupModel):
 
         # For dissipative beaches (Eqn 18)
         dissipative_mask = self.zeta < 0.3
-        result[dissipative_mask] = (
-            0.043 * (self.Hs[dissipative_mask] * self.L0[dissipative_mask]) ** 0.5
-        )
+        if np.any(dissipative_mask):
+            result[dissipative_mask] = (0.043 * (self.Hs[dissipative_mask] * self.L0[dissipative_mask]) ** 0.5)
 
         result = self._return_one_or_array(result)
         return result
